@@ -27,7 +27,6 @@ fn landed_core_audits_and_parses_landed_sidecar_contract() {
                 "flags2env-platform-sidecar",
                 "preflight",
                 "--bind=127.0.0.1:19090",
-                "--allow-non-loopback=yes",
             ]),
             Some(path),
         )
@@ -41,14 +40,24 @@ fn landed_core_audits_and_parses_landed_sidecar_contract() {
         parsed.provided_flags.get("FLAGS_2_ENV_SIDECAR_BIND").map(String::as_str),
         Some("127.0.0.1:19090")
     );
-    assert_eq!(
-        parsed
-            .provided_flags
-            .get("FLAGS_2_ENV_SIDECAR_ALLOW_NON_LOOPBACK")
-            .map(String::as_str),
-        Some("true")
-    );
     assert!(parsed.dotenv.is_empty(), "sidecar contract must not load ambient dotenv files");
+}
+
+#[test]
+fn landed_core_normalizes_health_probe_alias() {
+    let contract = sidecar_contract();
+    let path = contract.to_str().expect("UTF-8 sidecar contract path");
+    let parsed = BundledFlags2Env::new()
+        .parse_structured(
+            &argv(&["flags2env-platform-sidecar", "probe-healthz"]),
+            Some(path),
+        )
+        .expect("structured parse");
+
+    assert!(parsed.errors.is_empty());
+    assert!(parsed.unknown_options.is_empty());
+    assert!(parsed.extras.is_empty());
+    assert_eq!(parsed.command, "probe");
 }
 
 #[test]
