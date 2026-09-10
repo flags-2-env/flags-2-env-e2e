@@ -16,11 +16,16 @@ fn argv(items: &[&str]) -> Vec<String> {
 #[test]
 fn landed_core_audits_and_parses_landed_sidecar_contract() {
     let contract = sidecar_contract();
-    assert!(contract.is_file(), "missing sidecar checkout contract: {contract:?}");
+    assert!(
+        contract.is_file(),
+        "missing sidecar checkout contract: {contract:?}"
+    );
     let path = contract.to_str().expect("UTF-8 sidecar contract path");
     let parser = BundledFlags2Env::new();
 
-    parser.audit_config(Some(path)).expect("sidecar contract audit");
+    parser
+        .audit_config(Some(path))
+        .expect("sidecar contract audit");
     let parsed = parser
         .parse_structured(
             &argv(&[
@@ -32,15 +37,25 @@ fn landed_core_audits_and_parses_landed_sidecar_contract() {
         )
         .expect("structured parse");
 
-    assert!(parsed.errors.is_empty(), "parser errors: {}", parsed.errors.len());
+    assert!(
+        parsed.errors.is_empty(),
+        "parser errors: {}",
+        parsed.errors.len()
+    );
     assert!(parsed.unknown_options.is_empty());
     assert!(parsed.extras.is_empty());
     assert_eq!(parsed.command, "preflight");
     assert_eq!(
-        parsed.provided_flags.get("FLAGS_2_ENV_SIDECAR_BIND").map(String::as_str),
+        parsed
+            .provided_flags
+            .get("FLAGS_2_ENV_SIDECAR_BIND")
+            .map(String::as_str),
         Some("127.0.0.1:19090")
     );
-    assert!(parsed.dotenv.is_empty(), "sidecar contract must not load ambient dotenv files");
+    assert!(
+        parsed.dotenv.is_empty(),
+        "sidecar contract must not load ambient dotenv files"
+    );
 }
 
 #[test]
