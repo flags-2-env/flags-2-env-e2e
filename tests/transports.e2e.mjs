@@ -10,6 +10,7 @@ for (const command of ["preflight", "probe", "probe-readyz"]) {
 }
 assert(contract.includes('aliases = ["probe-healthz"]'), "health probe alias remains canonical");
 assert(contract.includes('default = "127.0.0.1:9090"'), "sidecar stays loopback by default");
-assert(contract.includes('env = "FLAGS_2_ENV_SIDECAR_ALLOW_NON_LOOPBACK"'), "non-loopback opt-in is explicit");
+assert(contract.includes('env = "FLAGS_2_ENV_SIDECAR_BIND"'), "bind env key remains product-owned");
+assert(!contract.includes("ALLOW_NON_LOOPBACK"), "product sidecar does not inherit undeclared generic flags");
 
 console.log("flags-2-env sidecar command/probe transport contract ok");
