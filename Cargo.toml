@@ -1,0 +1,11 @@
+[package]
+name = "flags-2-env-e2e-harness"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dev-dependencies]
+flags2env = { git = "https://github.com/flags-2-env/flags-2-env", rev = "333c2ace93c362d274171ab0e0edf613d96a8e59" }
+
+[lints.rust]
+unsafe_code = "forbid"

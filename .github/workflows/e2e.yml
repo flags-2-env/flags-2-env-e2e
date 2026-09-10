@@ -1,9 +1,128 @@
 name: e2e
-on: [push, pull_request]
-jobs:
-  contracts:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: npm test
 
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flags2env-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cross-repo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      FLAGS2ENV_UPSTREAM_ROOT: upstream
+      FLAGS2ENV_SIDECAR_CHECKOUT: upstream/sidecar
+    steps:
+      - name: Check out exact E2E candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Verify exact E2E candidate
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Check out admitted flags2env core
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: flags-2-env/flags-2-env
+          ref: 333c2ace93c362d274171ab0e0edf613d96a8e59
+          path: upstream/core
+          persist-credentials: false
+
+      - name: Check out admitted interface authorities
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: flags-2-env/flags-2-env-interfaces
+          ref: 0f9401f841c204bc766bd9095f619bba97ca178e
+          path: upstream/interfaces
+          persist-credentials: false
+
+      - name: Check out admitted sidecar runtime
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: flags-2-env/flags-2-env-sidecar.rs
+          ref: 3e9ffce4dd1fcce8c45a8b25d21168ba964abc65
+          path: upstream/sidecar
+          persist-credentials: false
+
+      - name: Verify immutable upstream revisions
+        run: |
+          set -euo pipefail
+          test "$(git -C upstream/core rev-parse HEAD)" = 333c2ace93c362d274171ab0e0edf613d96a8e59
+          test "$(git -C upstream/interfaces rev-parse HEAD)" = 0f9401f841c204bc766bd9095f619bba97ca178e
+          test "$(git -C upstream/sidecar rev-parse HEAD)" = 3e9ffce4dd1fcce8c45a8b25d21168ba964abc65
+
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.90.0 --profile minimal --component rustfmt,clippy
+
+      - name: Verify committed E2E dependency graph
+        run: |
+          set -euo pipefail
+          cargo +1.90.0 metadata --locked --format-version 1 > /dev/null
+          git diff --exit-code -- Cargo.lock
+
+      - name: Run cross-repository static contract checks
+        run: npm test
+
+      - name: Exercise landed sidecar contract through landed core parser
+        run: |
+          set -euo pipefail
+          cargo +1.90.0 fmt --all -- --check
+          cargo +1.90.0 clippy --all-targets --locked -- -D warnings
+          cargo +1.90.0 test --all-targets --locked
+
+      - name: Re-admit landed TypeSpec and JSON Schema peer authorities
+        uses: ORESoftware/typespec-json-schema-validator@bd7f988f110d4f8cd244d1388f6cbc09b5d349ff
+        with:
+          typespec: upstream/interfaces/schema/v1/flagcatalog.tsp
+          schema: upstream/interfaces/schema/v1/flagcatalog.json
+          instances: upstream/interfaces/schema/v1/instances
+          report: .typespec-json-schema-validator/report.json
+          output_dir: .typespec-json-schema-validator/generated
+          seal_object_schemas: false
+
+      - name: Exercise landed sidecar executable boundary
+        working-directory: upstream/sidecar
+        run: |
+          set -euo pipefail
+          cargo +1.90.0 run --quiet --locked --bin flags2env-platform-sidecar -- preflight
+
+          if FLAGS_2_ENV_SIDECAR_BIND=not-a-socket \
+            cargo +1.90.0 run --quiet --locked --bin flags2env-platform-sidecar -- preflight; then
+            echo "invalid environment bind unexpectedly passed" >&2
+            exit 1
+          fi
+
+          FLAGS_2_ENV_SIDECAR_BIND=not-a-socket \
+            cargo +1.90.0 run --quiet --locked --bin flags2env-platform-sidecar -- \
+              preflight --bind=127.0.0.1:19090
+
+      - name: Exercise landed distroless packaging
+        working-directory: upstream/sidecar
+        run: |
+          set -euo pipefail
+          docker build --tag flags2env-e2e-sidecar:ci .
+          docker run --rm flags2env-e2e-sidecar:ci preflight
+
+      - name: Retain committed lock and TJSV evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: flags2env-cross-repo-evidence-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            Cargo.lock
+            .typespec-json-schema-validator/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
