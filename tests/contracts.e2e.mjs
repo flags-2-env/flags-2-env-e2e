@@ -19,6 +19,6 @@ assert(typespec.includes('extension("additionalProperties", false)'), "TypeSpec 
 assert(coreCargo.includes('name = "flags2env"'), "Rust runtime is the canonical flags2env client");
 assert(sidecarFlags.includes("files = []"), "sidecar disables ambient dotenv files");
 assert(sidecarFlags.includes("allow_unknown = false"), "sidecar rejects undeclared argv");
-assert(sidecarDockerfile.includes('COPY --from=build --chown=65532:65532 ".cli-flags.toml" "/.cli-flags.toml"'), "distroless image carries audited flags contract");
+assert(sidecarDockerfile.includes('COPY --chown=65532:65532 ".cli-flags.toml" "/.cli-flags.toml"'), "distroless image carries audited flags contract");
 
 console.log("flags-2-env landed cross-repo authorities agree on the runtime boundary");
